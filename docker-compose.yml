@@ -1,0 +1,37 @@
+# Redis + two limiter replicas sharing it.
+#   docker compose up --build          # start the stack
+#   docker compose run --rm loadtest   # benchmark both replicas from inside the network
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  limiter-1: &limiter
+    build: .
+    image: distributed-rate-limiter:local
+    environment:
+      BACKEND: redis
+      REDIS_ADDR: redis:6379
+      REDIS_TIMEOUT: 50ms
+      FAIL_OPEN: "true"
+    ports: ["50051:50051", "9090:9090"]
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  limiter-2:
+    <<: *limiter
+    ports: ["50052:50051", "9091:9090"]
+
+  loadtest:
+    image: distributed-rate-limiter:local
+    entrypoint: ["/app/loadtest"]
+    command: ["-addr", "limiter-1:50051,limiter-2:50051", "-c", "64", "-d", "15s"]
+    depends_on: [limiter-1, limiter-2]
+    profiles: ["bench"]

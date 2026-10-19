@@ -1,0 +1,26 @@
+# Rate limit rules. Each rule allows at most `limit` units per `window`.
+# algorithm: token_bucket | sliding_window_log | sliding_window_counter
+rules:
+  # Smooth per-user API limit that tolerates short bursts.
+  - name: api-per-user
+    algorithm: token_bucket
+    limit: 100
+    window: 1m
+
+  # Exact limit for sensitive actions: max 5 login attempts per 15 minutes.
+  - name: login-attempts
+    algorithm: sliding_window_log
+    limit: 5
+    window: 15m
+
+  # High-volume per-IP limit with O(1) memory per key.
+  - name: ip-global
+    algorithm: sliding_window_counter
+    limit: 1000
+    window: 1m
+
+  # Effectively unlimited; used by the load test to measure pure overhead.
+  - name: bench
+    algorithm: token_bucket
+    limit: 1000000000
+    window: 1s
